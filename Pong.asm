@@ -3,10 +3,14 @@ STACK SEGMENT PARA STACK
 STACK ENDS
 
 DATA SEGMENT PARA 'DATA'
+
+	TIME_AUX DB 0    	   ;variable used when checking if the time has changed
 	
-	BALL_X DW 0Ah    ;X position (column) of the ball
-	BALL_Y DW 0Ah    ;Y position (line) of the ball
-	BALL_SIZE DW 04h ;size of the ball (how many pixels does the ball have in width and height)
+	BALL_X DW 0Ah    	   ;X position (column) of the ball
+	BALL_Y DW 0Ah    	   ;Y position (line) of the ball
+	BALL_SIZE DW 04h 	   ;size of the ball (how many pixels does the ball have in width and height)
+	BALL_VELOCITY_X DW 05h ;X (horizontal) velocity of the ball
+	BALL_VELOCITY_Y DW 02h ;Y (vertical) velocity of the ball
 	
 DATA ENDS
 
@@ -22,26 +26,26 @@ CODE SEGMENT PARA 'CODE'
 	POP AX                          ;release the top item from the stack to the AX register
 	POP AX                          ;release the top item from the stack to the AX register
 	
-		MOV AH,00h ;set the configuration to video mode
-		MOV AL,13h ;choose the video mode
-		INT 10h    ;execute the configuration EXAMPLEFORALLINSTANCES-------
+		CALL CLEAR_SCREEN
 		
-		MOV AH,0Bh ;set the configuration
-		MOV BH,00h ;to the background color
-		MOV BL,00h ;choose green as background color
-		INT 10h
-		
-		;SETTING ALL PIXELS TO GREEN FOR GREEN BACKGROUND
-		MOV AX, 0A000h  ; Set segment to video memory
-		MOV ES, AX
-		XOR DI, DI      ; Start at the beginning of video memory
-
-		MOV CX, 320*200 ; Total number of pixels in mode 13h
-		MOV AL, 2       ; Color index for green
-		REP STOSB       ; Set each pixel to green
-		;--------------------------------------------------------
-		
-		CALL DRAW_BALL
+		CHECK_TIME:
+			
+			MOV AH, 2Ch ;get the system time
+			INT 21h     ;CH = hour CL = minute DH = second DL = 1/100 seconds
+			
+			CMP DL,TIME_AUX ;is the current time equal to the previous one(TIME_AUX)?
+			JE CHECK_TIME	;if it is the same, check again
+			
+			;if it's different, then draw, move, etc.
+			MOV TIME_AUX,DL	;update time
+			
+			CALL CLEAR_SCREEN
+			
+			CALL MOVE_BALL
+			
+			CALL DRAW_BALL
+			
+			JMP CHECK_TIME  ;after everything checks time again
 		
 		RET
 	MAIN ENDP
@@ -72,6 +76,40 @@ CODE SEGMENT PARA 'CODE'
 		
 		RET
 	DRAW_BALL  ENDP
+	
+	MOVE_BALL PROC NEAR
+		
+		MOV AX,BALL_VELOCITY_X
+		ADD BALL_X,AX
+		MOV AX,BALL_VELOCITY_Y
+		ADD BALL_Y,AX
+		
+		RET
+	MOVE_BALL ENDP
+	
+	CLEAR_SCREEN PROC NEAR
+	
+		MOV AH,00h ;set the configuration to video mode
+		MOV AL,13h ;choose the video mode
+		INT 10h    ;execute the configuration EXAMPLEFORALLINSTANCES-------
+		
+		MOV AH,0Bh ;set the configuration
+		MOV BH,00h ;to the background color
+		MOV BL,00h ;choose green as background color
+		INT 10h
+		
+		;SETTING ALL PIXELS TO GREEN FOR GREEN BACKGROUND
+		;MOV AX, 0A000h  ; Set segment to video memory
+		;MOV ES, AX
+		;XOR DI, DI      ; Start at the beginning of video memory
+
+		;MOV CX, 320*200 ; Total number of pixels in mode 13h
+		;MOV AL, 2       ; Color index for green
+		;REP STOSB       ; Set each pixel to green
+		;--------------------------------------------------------
+	
+		RET
+	CLEAR_SCREEN ENDP
 	
 CODE ENDS
 END
