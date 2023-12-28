@@ -10,6 +10,9 @@ DATA SEGMENT PARA 'DATA'
 
 	TIME_AUX DB 0    	                        ;variable used when checking if the time has changed
 	
+	TEXT_PLAYER_ONE_POINTS DB '0','$'			;text with the player one points
+	TEXT_PLAYER_TWO_POINTS DB '0','$'			;text with the player two points
+	
 	BALL_ORIGINAL_X DW 96h				   	    ;X position of the ball on the beggining of the game
 	BALL_ORIGINAL_Y DW 5Ah                      ;Y position of the ball on the beggining of the game
 	BALL_X DW 96h   	                        ;X position (column) of the ball
@@ -20,9 +23,11 @@ DATA SEGMENT PARA 'DATA'
 	
 	PADDLE_LEFT_X DW 0Ah                        ;current X position of the left paddle
 	PADDLE_LEFT_Y DW 0Ah                        ;current Y position of the left paddle
+	PADDLE_LEFT_POINTS DB 0						;current points of the left player (player one)
 	
 	PADDLE_RIGHT_X DW 130h                      ;current X position of the right paddle
 	PADDLE_RIGHT_Y DW 0Ah                       ;current Y position of the right paddle
+	PADDLE_RIGHT_POINTS DB 0					;current points of the right player (player two)
 	
 	PADDLE_WIDTH DW 05h                         ;default paddle width
 	PADDLE_HEIGHT DW 1Fh                        ;default paddle height
@@ -65,6 +70,8 @@ CODE SEGMENT PARA 'CODE'
 			CALL MOVE_PADDLES				    ;move the two paddles (check for pressing keys)
 			
 			CALL DRAW_PADDLES				    ;draw the two paddles with the updated positions
+			
+			CALL DRAW_UI						;draw games user interface
 			
 			JMP CHECK_TIME  				    ;after everything checks time again
 		
@@ -158,7 +165,7 @@ CODE SEGMENT PARA 'CODE'
 ;		If it is colliding, restart it's position
 		MOV AX,WINDOW_BOUNDS
 		CMP BALL_X,AX		     				;BALL_X is compared with the left boundarie of the screen (0 + WINDOW_BOUNDS)
-		JL RESET_POSITION		 				;if it's less, reset position
+		JL GIVE_POINT_TO_PLAYER_TWO 			;if it's less, give one point to the player two and reset ball position
 		
 ;		Check if the ball has passed the right boundarie (BALL_X > WINDOW_WIDTH - BALL_SIZE - WINDOW_BOUNDS)
 ;		If it is colliding, restart it's position
@@ -166,11 +173,32 @@ CODE SEGMENT PARA 'CODE'
 		SUB AX,BALL_SIZE
 		SUB AX,WINDOW_BOUNDS
 		CMP BALL_X,AX							;BALL_X is compared with the right boundarie of the screen (BALL_X > WINDOW_WIDTH - BALL_SIZE - WINDOW_BOUNDS)
-		JG RESET_POSITION						;if it's greater, reset position
+		JG GIVE_POINT_TO_PLAYER_ONE 			;if it's less, give one point to the player one and reset ball position
+		JMP MOVE_BALL_VERTICALLY
 		
+		GIVE_POINT_TO_PLAYER_ONE:				;give one point to the player one and reset ball position
+			INC PADDLE_LEFT_POINTS				;increment player one points
+			CALL RESET_BALL_POSITION			;reset ball position to the center of the screen
+			CMP PADDLE_LEFT_POINTS,05h
+			JGE GAME_OVER
+			RET
+			
+		GIVE_POINT_TO_PLAYER_TWO:				;give one point to the player two and reset ball position
+			INC PADDLE_RIGHT_POINTS				;increment player two points
+			CALL RESET_BALL_POSITION			;reset ball position to the center of the screen
+			CMP PADDLE_RIGHT_POINTS,05h
+			JGE GAME_OVER
+			RET
+		
+		GAME_OVER:								;if someone reach 5 points restart the game
+			MOV PADDLE_LEFT_POINTS,00h			;reset player one points to zero
+			MOV PADDLE_RIGHT_POINTS,00h			;reset player two points to zero
+			RET
+		
+		MOVE_BALL_VERTICALLY:
 ;		Move the ball vertically
-		MOV AX,BALL_VELOCITY_Y	
-		ADD BALL_Y,AX
+			MOV AX,BALL_VELOCITY_Y	
+			ADD BALL_Y,AX
 
 ;		Check if the ball has passed the top boundarie (BALL_Y < 0 + WINDOW_BOUNDS)
 ;		If it's colliding, reverse the velocity in Y
@@ -186,14 +214,70 @@ CODE SEGMENT PARA 'CODE'
 		CMP BALL_Y,AX							;BALL_Y is compared with the bottom boundarie of the screen (BALL_Y > WINDOW_HEIGHT - BALL_SIZE - WINDOW_BOUNDS)
 		JG NEG_VELOCITY_Y						;if it's greater reverse the velocity in Y
 		
-		RET
+;		Check if the ball is colliding with the right paddle
+		;maxx1 > minx2 && minx1 < maxx2 && maxy1 > miny2 && miny1 < maxy2
+		;BALL_X + BALL_SIZE > PADDLE_RIGHT_X && BALL_X < PADDLE_RIGHT_X + PADDLE_WIDTH
+		; && BALL_Y + BALL_SIZE > PADDLE_RIGHT_Y && BALL_Y < PADDLE_RIGHT_Y + PADDLE_HEIGHT
+		MOV AX,BALL_X
+		ADD AX,BALL_SIZE
+		CMP AX,PADDLE_RIGHT_X
+		JNG CHECK_COLLISION_WITH_LEFT_PADDLE	;if there's no collision check for the left paddle collisions
 		
-		RESET_POSITION:
-			CALL RESET_BALL_POSITION			;reset ball position to the center of the screen
-			RET
+		MOV AX,PADDLE_RIGHT_X
+		ADD AX,PADDLE_WIDTH
+		CMP BALL_X,AX
+		JNL CHECK_COLLISION_WITH_LEFT_PADDLE	;if there's no collision check for the left paddle collisions
+		
+		MOV AX,BALL_Y
+		ADD AX,BALL_SIZE
+		CMP AX,PADDLE_RIGHT_Y
+		JNG CHECK_COLLISION_WITH_LEFT_PADDLE	;if there's no collision check for the left paddle collisions
+		
+		MOV AX,PADDLE_RIGHT_Y
+		ADD AX,PADDLE_HEIGHT
+		CMP BALL_Y,AX
+		JNL CHECK_COLLISION_WITH_LEFT_PADDLE	;if there's no collision check for the left paddle collisions
+
+;		If it reaches this point, the ball is colliding with the right paddle
+		JMP NEG_VELOCITY_X						;reverses the horizontal velocity of the ball
+		
+;		Check if the ball is colliding with the left paddle
+		CHECK_COLLISION_WITH_LEFT_PADDLE:
+		;maxx1 > minx2 && minx1 < maxx2 && maxy1 > miny2 && miny1 < maxy2
+		;BALL_X + BALL_SIZE > PADDLE_LEFT_X && BALL_X < PADDLE_LEFT_X + PADDLE_WIDTH
+		; && BALL_Y + BALL_SIZE > PADDLE_LEFT_Y && BALL_Y < PADDLE_LEFT_Y + PADDLE_HEIGHT
+			MOV AX,BALL_X
+			ADD AX,BALL_SIZE
+			CMP AX,PADDLE_LEFT_X
+			JNG EXIT_COLLISION_CHECK			;if there's no collision exit procedure
+			
+			MOV AX,PADDLE_LEFT_X
+			ADD AX,PADDLE_WIDTH
+			CMP BALL_X,AX
+			JNL EXIT_COLLISION_CHECK			;if there's no collision exit procedure
+			
+			MOV AX,BALL_Y
+			ADD AX,BALL_SIZE
+			CMP AX,PADDLE_LEFT_Y
+			JNG EXIT_COLLISION_CHECK			;if there's no collision exit procedure
+			
+			MOV AX,PADDLE_LEFT_Y
+			ADD AX,PADDLE_HEIGHT
+			CMP BALL_Y,AX
+			JNL EXIT_COLLISION_CHECK			;if there's no collision exit procedure
+
+	;		If it reaches this point, the ball is colliding with the left paddle
+			JMP NEG_VELOCITY_X					;reverses the horizontal velocity of the ball
 			
 		NEG_VELOCITY_Y:
 			NEG BALL_VELOCITY_Y					;reverse the velocity in Y of the ball (BALL_VELOCITY_Y -= BALL_VELOCITY_Y)
+			RET
+			
+		NEG_VELOCITY_X:
+			NEG BALL_VELOCITY_X					;reverse the velocity in X of the ball (BALL_VELOCITY_X -= BALL_VELOCITY_X)
+			RET
+			
+		EXIT_COLLISION_CHECK:
 			RET
 			
 	MOVE_BALL ENDP
@@ -312,6 +396,33 @@ CODE SEGMENT PARA 'CODE'
 	
 		RET
 	RESET_BALL_POSITION ENDP
+	
+	DRAW_UI PROC NEAR
+	
+;		Draw the points of the left player (player one)
+		MOV AH,02h								;set cursor position
+		MOV BH,00h								;set page number
+		MOV DH,04h								;set row
+		MOV DL,06h								;set column
+		INT 10h
+		
+		MOV AH,09h								;write string to standard output
+		LEA DX,TEXT_PLAYER_ONE_POINTS			;give DX a pointer to the string TEXT_PLAYER_ONE_POINTS
+		INT 21h									;print the string
+
+;		Draw the points of the right player (player two)
+		MOV AH,02h								;set cursor position
+		MOV BH,00h								;set page number
+		MOV DH,04h								;set row
+		MOV DL,21h								;set column
+		INT 10h
+		
+		MOV AH,09h								;write string to standard output
+		LEA DX,TEXT_PLAYER_TWO_POINTS			;give DX a pointer to the string TEXT_PLAYER_TWO_POINTS
+		INT 21h									;print the string
+		
+		RET
+	DRAW_UI ENDP
 	
 	CLEAR_SCREEN PROC NEAR						;clear the screen by restarting the video mode
 	
