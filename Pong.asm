@@ -12,9 +12,11 @@ DATA SEGMENT PARA 'DATA'
 	
 	GAME_ACTIVE DB 1							;is the game active? (1 -> YES, 0 -> No (game over))
 	
+	EXITING_GAME DB 0
+	
 	WINNER_INDEX DB 0							;the index of the winner (1 -> player one, 2 -> player two)
 	
-	CURRENT_SCENE DB 1							;the index of the current scene (0 -> main menu, 1 -> game)
+	CURRENT_SCENE DB 0							;the index of the current scene (0 -> main menu, 1 -> game)
 	
 	TEXT_PLAYER_ONE_POINTS DB '0','$'			;text with the player one points
 	TEXT_PLAYER_TWO_POINTS DB '0','$'			;text with the player two points
@@ -65,6 +67,9 @@ CODE SEGMENT PARA 'CODE'
 		
 		CHECK_TIME:							    ;time checking loop
 		
+			CMP EXITING_GAME,01h
+			JE START_EXIT_PROCESS
+		
 			CMP CURRENT_SCENE,00h
 			JE SHOW_MAIN_MENU
 		
@@ -103,6 +108,9 @@ CODE SEGMENT PARA 'CODE'
 				CALL DRAW_MAIN_MENU
 				JMP CHECK_TIME
 				
+			START_EXIT_PROCESS:
+				CALL CONCLUDE_EXIT_GAME
+			
 			RET
 	MAIN ENDP
 	
@@ -622,17 +630,38 @@ CODE SEGMENT PARA 'CODE'
 		LEA DX,TEXT_MAIN_MENU_EXIT				;give DX a pointer to the string TEXT_MAIN_MENU_EXIT
 		INT 21h									;print the string
 		
-;       Waits for a key press
-		MOV AH,00h
-		INT 16h
+		MAIN_MENU_WAIT_FOR_KEY:
+;       	Waits for a key press
+			MOV AH,00h
+			INT 16h
+			
+;			Check which key was pressed
+			CMP AL,'S'
+			JE START_SINGLEPLAYER
+			CMP AL,'s'
+			JE START_SINGLEPLAYER
+			CMP AL,'M'
+			JE START_MULTIPLAYER
+			CMP AL,'m'
+			JE START_MULTIPLAYER
+			CMP AL,'E'
+			JE EXIT_GAME
+			CMP AL,'e'
+			JE EXIT_GAME
+			JMP MAIN_MENU_WAIT_FOR_KEY
 		
-;		If the key is either 'R' or 'r', restart the game
-		CMP AL,'R'
-		JE RESTART_GAME
-		CMP AL,'r'
-		JE RESTART_GAME
+		START_SINGLEPLAYER:
+			MOV CURRENT_SCENE,01h
+			MOV GAME_ACTIVE,01h
+			RET
+		
+		START_MULTIPLAYER:
+			JMP MAIN_MENU_WAIT_FOR_KEY ;TODO
+			
+		EXIT_GAME:
+			MOV EXITING_GAME,01h
+			RET
 	
-		RET
 	DRAW_MAIN_MENU ENDP
 	
 	UPDATE_WINNER_TEXT PROC NEAR
@@ -667,6 +696,17 @@ CODE SEGMENT PARA 'CODE'
 	
 		RET
 	CLEAR_SCREEN ENDP
+	
+	CONCLUDE_EXIT_GAME PROC NEAR				;goes back to the text mode
+	
+		MOV AH,00h								;set the configuration to video mode
+		MOV AL,02h								;choose the video mode
+		INT 10h									;execute the configuration
+		
+		MOV AH,4Ch								;terminate program
+		INT 21h
+		
+	CONCLUDE_EXIT_GAME ENDP
 	
 CODE ENDS
 END
