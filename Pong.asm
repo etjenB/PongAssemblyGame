@@ -10,8 +10,14 @@ DATA SEGMENT PARA 'DATA'
 
 	TIME_AUX DB 0    	                        ;variable used when checking if the time has changed
 	
+	GAME_ACTIVE DB 1							;is the game active? (1 -> YES, 0 -> No (game over))
+	
+	WINNER_INDEX DB 0							;the index of the winner (1 -> player one, 2 -> player two)
+	
 	TEXT_PLAYER_ONE_POINTS DB '0','$'			;text with the player one points
 	TEXT_PLAYER_TWO_POINTS DB '0','$'			;text with the player two points
+	TEXT_GAME_OVER_TITLE DB 'GAME OVER','$'		;game over menu title
+	TEXT_GAME_OVER_WINNER DB 'Player 0 won','$'	;text with the winner text
 	
 	BALL_ORIGINAL_X DW 96h				   	    ;X position of the ball on the beggining of the game
 	BALL_ORIGINAL_Y DW 5Ah                      ;Y position of the ball on the beggining of the game
@@ -23,11 +29,11 @@ DATA SEGMENT PARA 'DATA'
 	
 	PADDLE_LEFT_X DW 0Ah                        ;current X position of the left paddle
 	PADDLE_LEFT_Y DW 0Ah                        ;current Y position of the left paddle
-	PADDLE_LEFT_POINTS DB 0						;current points of the left player (player one)
+	PLAYER_ONE_POINTS DB 0						;current points of the left player (player one)
 	
 	PADDLE_RIGHT_X DW 130h                      ;current X position of the right paddle
 	PADDLE_RIGHT_Y DW 0Ah                       ;current Y position of the right paddle
-	PADDLE_RIGHT_POINTS DB 0					;current points of the right player (player two)
+	PLAYER_TWO_POINTS DB 0						;current points of the right player (player two)
 	
 	PADDLE_WIDTH DW 05h                         ;default paddle width
 	PADDLE_HEIGHT DW 1Fh                        ;default paddle height
@@ -50,6 +56,9 @@ CODE SEGMENT PARA 'CODE'
 		CALL CLEAR_SCREEN					    ;set initial video mode configuration
 		
 		CHECK_TIME:							    ;time checking loop
+		
+			CMP GAME_ACTIVE,00h
+			JE SHOW_GAME_OVER
 			
 			MOV AH, 2Ch 					    ;get the system time
 			INT 21h     					    ;CH = hour CL = minute DH = second DL = 1/100 seconds
@@ -74,6 +83,10 @@ CODE SEGMENT PARA 'CODE'
 			CALL DRAW_UI						;draw games user interface
 			
 			JMP CHECK_TIME  				    ;after everything checks time again
+			
+			SHOW_GAME_OVER:
+				CALL DRAW_GAME_OVER_MENU
+				JMP CHECK_TIME
 		
 		RET
 	MAIN ENDP
@@ -177,23 +190,40 @@ CODE SEGMENT PARA 'CODE'
 		JMP MOVE_BALL_VERTICALLY
 		
 		GIVE_POINT_TO_PLAYER_ONE:				;give one point to the player one and reset ball position
-			INC PADDLE_LEFT_POINTS				;increment player one points
+			INC PLAYER_ONE_POINTS				;increment player one points
 			CALL RESET_BALL_POSITION			;reset ball position to the center of the screen
-			CMP PADDLE_LEFT_POINTS,05h
+			CALL UPDATE_TEXT_PLAYER_ONE_POINTS	;update the text of the player one points
+			CMP PLAYER_ONE_POINTS,05h
 			JGE GAME_OVER
 			RET
 			
 		GIVE_POINT_TO_PLAYER_TWO:				;give one point to the player two and reset ball position
-			INC PADDLE_RIGHT_POINTS				;increment player two points
+			INC PLAYER_TWO_POINTS				;increment player two points
 			CALL RESET_BALL_POSITION			;reset ball position to the center of the screen
-			CMP PADDLE_RIGHT_POINTS,05h
+			CALL UPDATE_TEXT_PLAYER_TWO_POINTS	;update the text of the player two points
+			CMP PLAYER_TWO_POINTS,05h
 			JGE GAME_OVER
 			RET
 		
 		GAME_OVER:								;if someone reach 5 points restart the game
-			MOV PADDLE_LEFT_POINTS,00h			;reset player one points to zero
-			MOV PADDLE_RIGHT_POINTS,00h			;reset player two points to zero
-			RET
+			CMP PLAYER_ONE_POINTS,05h			;check which player has 5 or more points
+			JNL WINNER_IS_PLAYER_ONE			;if the player one has not less than 5 points he's the winner
+			JMP WINNER_IS_PLAYER_TWO			;if not then player two is the winner
+			
+			WINNER_IS_PLAYER_ONE:
+				MOV WINNER_INDEX,01h			;update the winner index with the player one index
+				JMP CONTINUE_GAME_OVER
+			WINNER_IS_PLAYER_TWO:
+				MOV WINNER_INDEX,02h			;update the winner index with the player two index
+				JMP CONTINUE_GAME_OVER
+			
+			CONTINUE_GAME_OVER:
+				MOV PLAYER_ONE_POINTS,00h			;reset player one points to zero
+				MOV PLAYER_TWO_POINTS,00h			;reset player two points to zero
+				CALL UPDATE_TEXT_PLAYER_ONE_POINTS
+				CALL UPDATE_TEXT_PLAYER_TWO_POINTS
+				MOV GAME_ACTIVE,00h					;stops the game
+				RET
 		
 		MOVE_BALL_VERTICALLY:
 ;		Move the ball vertically
@@ -423,6 +453,78 @@ CODE SEGMENT PARA 'CODE'
 		
 		RET
 	DRAW_UI ENDP
+	
+	UPDATE_TEXT_PLAYER_ONE_POINTS PROC NEAR
+	
+		XOR AX,AX 								;clear AX register
+		MOV AL,PLAYER_ONE_POINTS				;given, for example that P1 -> 2 points => AL,2
+		
+		;before printing to the screen, we need to convert the decimal value to the ascii code character
+		;we can do this by adding 30h (number to ASCII)
+		;and by subtracting 30h (ASCII to number)
+		ADD AL,30h								;AL,'2'
+		MOV [TEXT_PLAYER_ONE_POINTS],AL
+	
+		RET
+	UPDATE_TEXT_PLAYER_ONE_POINTS ENDP
+	
+	UPDATE_TEXT_PLAYER_TWO_POINTS PROC NEAR
+	
+		XOR AX,AX 								;clear AX register
+		MOV AL,PLAYER_TWO_POINTS				;given, for example that P2 -> 2 points => AL,2
+		
+		;before printing to the screen, we need to convert the decimal value to the ascii code character
+		;we can do this by adding 30h (number to ASCII)
+		;and by subtracting 30h (ASCII to number)
+		ADD AL,30h								;AL,'2'
+		MOV [TEXT_PLAYER_TWO_POINTS],AL
+	
+		RET
+	UPDATE_TEXT_PLAYER_TWO_POINTS ENDP
+	
+	DRAW_GAME_OVER_MENU PROC NEAR
+	
+		CALL CLEAR_SCREEN
+		
+;		Shows the menu title
+		MOV AH,02h								;set cursor position
+		MOV BH,00h								;set page number
+		MOV DH,04h								;set row
+		MOV DL,06h								;set column
+		INT 10h
+		
+		MOV AH,09h								;write string to standard output
+		LEA DX,TEXT_GAME_OVER_TITLE				;give DX a pointer to the string TEXT_GAME_OVER_TITLE
+		INT 21h									;print the string
+		
+;		Shows the winner
+		MOV AH,02h								;set cursor position
+		MOV BH,00h								;set page number
+		MOV DH,06h								;set row
+		MOV DL,06h								;set column
+		INT 10h
+		
+		CALL UPDATE_WINNER_TEXT
+		
+		MOV AH,09h								;write string to standard output
+		LEA DX,TEXT_GAME_OVER_WINNER			;give DX a pointer to the string TEXT_GAME_OVER_WINNER
+		INT 21h									;print the string
+		
+;       Waits for a key press
+		MOV AH,00h
+		INT 16h
+	
+		RET
+	DRAW_GAME_OVER_MENU ENDP
+	
+	UPDATE_WINNER_TEXT PROC NEAR
+	
+		MOV AL,WINNER_INDEX						;if winner index is 1 => AL,1
+		ADD AL,30h								;AL,31h => AL,'1'
+		MOV [TEXT_GAME_OVER_WINNER+7],AL		;update the index in the text with the character
+	
+		RET
+	UPDATE_WINNER_TEXT ENDP
 	
 	CLEAR_SCREEN PROC NEAR						;clear the screen by restarting the video mode
 	
