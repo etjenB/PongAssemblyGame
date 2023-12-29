@@ -44,6 +44,7 @@ DATA SEGMENT PARA 'DATA'
 	PADDLE_RIGHT_X DW 130h                      ;current X position of the right paddle
 	PADDLE_RIGHT_Y DW 0Ah                       ;current Y position of the right paddle
 	PLAYER_TWO_POINTS DB 0						;current points of the right player (player two)
+	AI_CONTROLLED DB 0							;is the right paddle controlled by AI
 	
 	PADDLE_WIDTH DW 05h                         ;default paddle width
 	PADDLE_HEIGHT DW 1Fh                        ;default paddle height
@@ -391,17 +392,37 @@ CODE SEGMENT PARA 'CODE'
 		
 ;		Right paddle movement
 		CHECK_RIGHT_PADDLE_MOVEMENT:
-			;if it is 'o' or 'O' move up
-			CMP AL,6Fh ;o
-			JE MOVE_RIGHT_PADDLE_UP
-			CMP AL,4Fh ;O
-			JE MOVE_RIGHT_PADDLE_UP
-			;if it is 'l' or 'L' move down
-			CMP AL,6Ch ;l
-			JE MOVE_RIGHT_PADDLE_DOWN
-			CMP AL,4Ch ;L
-			JE MOVE_RIGHT_PADDLE_DOWN
-			JMP EXIT_PADDLE_MOVEMENT
+		
+			CMP AI_CONTROLLED,01h
+			JE CONTROL_BY_AI
+			
+			CHECK_FOR_KEYS:
+				;if it is 'o' or 'O' move up
+				CMP AL,6Fh ;o
+				JE MOVE_RIGHT_PADDLE_UP
+				CMP AL,4Fh ;O
+				JE MOVE_RIGHT_PADDLE_UP
+				;if it is 'l' or 'L' move down
+				CMP AL,6Ch ;l
+				JE MOVE_RIGHT_PADDLE_DOWN
+				CMP AL,4Ch ;L
+				JE MOVE_RIGHT_PADDLE_DOWN
+				JMP EXIT_PADDLE_MOVEMENT
+				
+			CONTROL_BY_AI:
+				MOV AX,BALL_Y
+				ADD AX,BALL_SIZE
+				SUB AX,02h
+				CMP AX,PADDLE_RIGHT_Y
+				JL MOVE_RIGHT_PADDLE_UP
+				
+				MOV AX,PADDLE_RIGHT_Y
+				ADD AX,PADDLE_HEIGHT
+				SUB AX,05h
+				CMP AX,BALL_Y
+				JL MOVE_RIGHT_PADDLE_DOWN
+				
+				JMP EXIT_PADDLE_MOVEMENT
 			
 			MOVE_RIGHT_PADDLE_UP:
 				MOV AX,PADDLE_VELOCITY
@@ -653,10 +674,14 @@ CODE SEGMENT PARA 'CODE'
 		START_SINGLEPLAYER:
 			MOV CURRENT_SCENE,01h
 			MOV GAME_ACTIVE,01h
+			MOV AI_CONTROLLED,00h
 			RET
 		
 		START_MULTIPLAYER:
-			JMP MAIN_MENU_WAIT_FOR_KEY ;TODO
+			MOV CURRENT_SCENE,01h
+			MOV GAME_ACTIVE,01h
+			MOV AI_CONTROLLED,01h
+			RET
 			
 		EXIT_GAME:
 			MOV EXITING_GAME,01h

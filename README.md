@@ -24,3 +24,5 @@ link pong
 pong
 
 and the game will start.
+
+Alternatively, you can copy config for DOSBox options config file from DOSBoxConfig.txt file you can find in repository. It also has some optimizations for smoother gameplay.
