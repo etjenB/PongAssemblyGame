@@ -14,10 +14,18 @@ DATA SEGMENT PARA 'DATA'
 	
 	WINNER_INDEX DB 0							;the index of the winner (1 -> player one, 2 -> player two)
 	
+	CURRENT_SCENE DB 1							;the index of the current scene (0 -> main menu, 1 -> game)
+	
 	TEXT_PLAYER_ONE_POINTS DB '0','$'			;text with the player one points
 	TEXT_PLAYER_TWO_POINTS DB '0','$'			;text with the player two points
 	TEXT_GAME_OVER_TITLE DB 'GAME OVER','$'		;game over menu title
 	TEXT_GAME_OVER_WINNER DB 'Player 0 won','$'	;text with the winner text
+	TEXT_GAME_OVER_PLAY_AGAIN DB 'Press R to play again','$' ;text with the game over play again message
+	TEXT_GAME_OVER_MAIN_MENU DB 'Press E to exit to main menu','$' ;text with the game over main menu message
+	TEXT_MAIN_MENU_TITLE DB 'MAIN MENU','$'		;text with the main menu title
+	TEXT_MAIN_MENU_SINGLEPLAYER DB 'SINGLEPLAYER - S KEY','$' ;text with the singleplayer message
+	TEXT_MAIN_MENU_MULTIPLAYER DB 'MULTIPLAYER - M KEY','$' ;text with the multiplayer message
+	TEXT_MAIN_MENU_EXIT DB 'EXIT GAME - E KEY','$' ;text with the exit game message
 	
 	BALL_ORIGINAL_X DW 96h				   	    ;X position of the ball on the beggining of the game
 	BALL_ORIGINAL_Y DW 5Ah                      ;Y position of the ball on the beggining of the game
@@ -57,6 +65,9 @@ CODE SEGMENT PARA 'CODE'
 		
 		CHECK_TIME:							    ;time checking loop
 		
+			CMP CURRENT_SCENE,00h
+			JE SHOW_MAIN_MENU
+		
 			CMP GAME_ACTIVE,00h
 			JE SHOW_GAME_OVER
 			
@@ -87,8 +98,12 @@ CODE SEGMENT PARA 'CODE'
 			SHOW_GAME_OVER:
 				CALL DRAW_GAME_OVER_MENU
 				JMP CHECK_TIME
-		
-		RET
+				
+			SHOW_MAIN_MENU:
+				CALL DRAW_MAIN_MENU
+				JMP CHECK_TIME
+				
+			RET
 	MAIN ENDP
 	
 	DRAW_BALL PROC NEAR
@@ -510,12 +525,115 @@ CODE SEGMENT PARA 'CODE'
 		LEA DX,TEXT_GAME_OVER_WINNER			;give DX a pointer to the string TEXT_GAME_OVER_WINNER
 		INT 21h									;print the string
 		
+;		Shows the play again message
+		MOV AH,02h								;set cursor position
+		MOV BH,00h								;set page number
+		MOV DH,08h								;set row
+		MOV DL,06h								;set column
+		INT 10h
+		
+		MOV AH,09h								;write string to standard output
+		LEA DX,TEXT_GAME_OVER_PLAY_AGAIN		;give DX a pointer to the string TEXT_GAME_OVER_PLAY_AGAIN
+		INT 21h									;print the string
+		
+;		Shows the main menu message
+		MOV AH,02h								;set cursor position
+		MOV BH,00h								;set page number
+		MOV DH,0Ah								;set row
+		MOV DL,06h								;set column
+		INT 10h
+		
+		MOV AH,09h								;write string to standard output
+		LEA DX,TEXT_GAME_OVER_MAIN_MENU			;give DX a pointer to the string TEXT_GAME_OVER_MAIN_MENU
+		INT 21h									;print the string
+		
 ;       Waits for a key press
 		MOV AH,00h
 		INT 16h
+		
+;		If the key is either 'R' or 'r', restart the game
+		CMP AL,'R'
+		JE RESTART_GAME
+		CMP AL,'r'
+		JE RESTART_GAME
+;		If the key is either 'E' or 'e', restart the game
+		CMP AL,'E'
+		JE EXIT_TO_MAIN_MENU
+		CMP AL,'e'
+		JE EXIT_TO_MAIN_MENU
+		RET
+		
+		RESTART_GAME:
+			MOV GAME_ACTIVE,01h
+			RET
+			
+		EXIT_TO_MAIN_MENU:
+			MOV GAME_ACTIVE,00h
+			MOV CURRENT_SCENE,00h
+			RET
+	
+	DRAW_GAME_OVER_MENU ENDP
+	
+	DRAW_MAIN_MENU PROC NEAR
+	
+		CALL CLEAR_SCREEN
+	
+;		Shows the menu title
+		MOV AH,02h								;set cursor position
+		MOV BH,00h								;set page number
+		MOV DH,04h								;set row
+		MOV DL,06h								;set column
+		INT 10h
+		
+		MOV AH,09h								;write string to standard output
+		LEA DX,TEXT_MAIN_MENU_TITLE				;give DX a pointer to the string TEXT_GAME_OVER_TITLE
+		INT 21h									;print the string
+		
+;		Shows the singleplayer message
+		MOV AH,02h								;set cursor position
+		MOV BH,00h								;set page number
+		MOV DH,06h								;set row
+		MOV DL,06h								;set column
+		INT 10h
+		
+		MOV AH,09h								;write string to standard output
+		LEA DX,TEXT_MAIN_MENU_SINGLEPLAYER		;give DX a pointer to the string TEXT_MAIN_MENU_SINGLEPLAYER
+		INT 21h									;print the string
+		
+;		Shows the multiplayer message
+		MOV AH,02h								;set cursor position
+		MOV BH,00h								;set page number
+		MOV DH,08h								;set row
+		MOV DL,06h								;set column
+		INT 10h
+		
+		MOV AH,09h								;write string to standard output
+		LEA DX,TEXT_MAIN_MENU_MULTIPLAYER		;give DX a pointer to the string TEXT_MAIN_MENU_MULTIPLAYER
+		INT 21h									;print the string
+		
+;		Shows the exit message
+		MOV AH,02h								;set cursor position
+		MOV BH,00h								;set page number
+		MOV DH,0Ah								;set row
+		MOV DL,06h								;set column
+		INT 10h
+		
+		MOV AH,09h								;write string to standard output
+		LEA DX,TEXT_MAIN_MENU_EXIT				;give DX a pointer to the string TEXT_MAIN_MENU_EXIT
+		INT 21h									;print the string
+		
+;       Waits for a key press
+		MOV AH,00h
+		INT 16h
+		
+;		If the key is either 'R' or 'r', restart the game
+		CMP AL,'R'
+		JE RESTART_GAME
+		CMP AL,'r'
+		JE RESTART_GAME
 	
 		RET
-	DRAW_GAME_OVER_MENU ENDP
+	DRAW_MAIN_MENU ENDP
 	
 	UPDATE_WINNER_TEXT PROC NEAR
 	
