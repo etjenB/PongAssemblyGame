@@ -1,4 +1,4 @@
-# pong-assembly-game
+# Pong assembly game
 Pong game created in 8086 Assembly.
 
 To test this game you can use DOSBox program, you can find and download DOSBox on the internet.
